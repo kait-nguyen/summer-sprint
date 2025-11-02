@@ -1,0 +1,10 @@
+# Replit and Python defaults
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+pythonlibs/
+data/
+.DS_Store
