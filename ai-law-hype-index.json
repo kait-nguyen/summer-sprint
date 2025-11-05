@@ -1,0 +1,383 @@
+{
+  "name": "AI Law Hype Index – News Fetcher",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "80ef4742-9cdc-42bd-9bac-c77afc7b2aa3",
+      "name": "Daily 9 AM AEST Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1808,
+        2016
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.gdeltproject.org/api/v2/doc/doc?query=(AI%20regulation%20OR%20%22AI%20Act%22%20OR%20%22AI%20ethics%22)&mode=ArtList&maxrecords=100&format=json",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fdad3097-49c5-4be2-bdaa-950c43ca4f20",
+      "name": "GDELT API Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2032,
+        2016
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q=\"AI regulation\" OR \"AI Act\" OR \"AI ethics\"&hl=en-AU&gl=AU&ceid=AU:en",
+        "options": {}
+      },
+      "id": "c4499adf-d2fa-446c-af62-97fc9d370a48",
+      "name": "Google News RSS Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        1808,
+        2240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1QA_cJ3-2HHAht4rHcPiHYmi2rKwqEi07pSRdpSK2LRE"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "headline": "={{$json[\"headline\"]}}",
+            "date": "={{$json[\"date\"]}}",
+            "source": "={{$json[\"source\"]}}",
+            "region": "={{$json[\"region\"]}}",
+            "tone": "={{$json[\"tone\"]}}",
+            "topics": "={{$json[\"topics\"]}}"
+          },
+          "matchingColumns": [
+            "headline"
+          ],
+          "schema": [
+            {
+              "id": "headline",
+              "displayName": "headline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "region",
+              "displayName": "region",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tone",
+              "displayName": "tone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "topics",
+              "displayName": "topics",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED",
+          "useAppend": false
+        }
+      },
+      "id": "313358f0-6db5-4f55-ba17-7d1249d5fa72",
+      "name": "Append to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3360,
+        2032
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3AbnKvV7Fgavd8oH",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const a = item.json;\n  let sourceUrl = \"\";\n\n  try {\n    // 📰 Extract true article URL from the content field (the <a href=\"\"> tag)\n    if (a.content && a.content.includes('<a href=\"')) {\n      const match = a.content.match(/<a href=\"([^\"]+)\"/);\n      if (match && match[1]) {\n        const decoded = decodeURIComponent(match[1]);\n        const innerMatch = decoded.match(/https?:\\/\\/(?!news\\.google\\.com)[^\"&]+/);\n        sourceUrl = innerMatch && innerMatch[0] ? innerMatch[0] : decoded;\n      }\n    } else if (a.link && a.link.includes(\"news.google.com\")) {\n      // fallback if no content tag\n      const decoded = decodeURIComponent(a.link);\n      const innerMatch = decoded.match(/https?:\\/\\/(?!news\\.google\\.com)[^\"&]+/);\n      sourceUrl = innerMatch && innerMatch[0] ? innerMatch[0] : decoded;\n    } else {\n      sourceUrl = a.link || \"\";\n    }\n  } catch (e) {\n    sourceUrl = a.link || \"\";\n  }\n\n  // 🌏 Improved region detection\n  let region = \"Global\";\n  try {\n    let hostname = new URL(sourceUrl).hostname.toLowerCase();\n    hostname = hostname.replace(/^(www\\.|m\\.|amp\\.)/, \"\");\n\n    if (hostname.includes(\".com.au\") || hostname.includes(\".gov.au\") || hostname.includes(\".org.au\")) {\n      region = \"AU\";\n    } else if (hostname.includes(\".co.uk\") || hostname.includes(\".gov.uk\") || hostname.includes(\".org.uk\")) {\n      region = \"UK\";\n    } else if (hostname.endsWith(\".ca\")) region = \"CA\";\n    else if (hostname.endsWith(\".fr\")) region = \"FR\";\n    else if (hostname.endsWith(\".de\")) region = \"DE\";\n    else if (hostname.endsWith(\".eu\")) region = \"EU\";\n    else if (hostname.endsWith(\".in\")) region = \"IN\";\n    else if (hostname.endsWith(\".sg\")) region = \"SG\";\n    else if (hostname.endsWith(\".nz\")) region = \"NZ\";\n    else if (hostname.endsWith(\".jp\")) region = \"JP\";\n    else if (\n      hostname.includes(\"europa\") ||\n      hostname.includes(\"europe\") ||\n      hostname.includes(\"eurlex\") ||\n      hostname.includes(\"eu-parliament\")\n    ) {\n      region = \"EU\";\n    } else {\n      const tld = hostname.split(\".\").pop().toUpperCase();\n      region = [\"COM\", \"ORG\", \"NET\", \"EDU\"].includes(tld) ? \"Global\" : tld;\n    }\n  } catch (e) {}\n\n  return {\n    json: {\n      headline: a.title || \"Untitled\",\n      date: a.pubDate || a.isoDate || \"\",\n      source: sourceUrl,\n      region,\n      sentiment: \"pending\"\n    }\n  };\n});\n"
+      },
+      "id": "f9726cbd-26d6-48fc-a629-39175a176c23",
+      "name": "Process RSS URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        2464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = items[0].json.data ? JSON.parse(items[0].json.data) : {};\nconst articles = raw.articles || [];\n\nfunction formatGDELTDate(seendate) {\n  // GDELT gives e.g. 20251028T221500Z — convert manually\n  if (!seendate || typeof seendate !== 'string' || seendate.length < 15) return \"Unknown\";\n  \n  try {\n    const year = seendate.slice(0, 4);\n    const month = seendate.slice(4, 6);\n    const day = seendate.slice(6, 8);\n    const hour = seendate.slice(9, 11);\n    const minute = seendate.slice(11, 13);\n    const second = seendate.slice(13, 15);\n\n    // Return Google Sheets–friendly timestamp\n    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;\n  } catch (e) {\n    return \"Unknown\";\n  }\n}\n\nreturn articles.map(a => ({\n  json: {\n    headline: a.title || \"Untitled\",\n    date: formatGDELTDate(a.seendate),\n    source: a.url || \"\",\n    region: a.sourcecountry || \"Global\",\n    sentiment: \"pending\"\n  }\n}));"
+      },
+      "id": "01deba1b-7ba8-4772-9197-f519d04cf342",
+      "name": "Extract GDELT Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        2016
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an AI that performs sentiment and topic classification on news headlines."
+            },
+            {
+              "content": "=Classify the sentiment (positive / negative / neutral)\nand extract exactly 3 short key topics from the following headline:\n\n\"{{ $json[\"headline\"] }}\"\n\nReturn only JSON in this format:\n{\n  \"tone\": \"positive | neutral | negative\",\n  \"topics\": [\"topic1\", \"topic2\", \"topic3\"]\n}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        2256
+      ],
+      "id": "e3b6ba72-7e3a-482b-8d67-cddef1fa47da",
+      "name": "Message a model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "Ipk53UdvshdH8RUn",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n provides input data via the variable 'items'\nconst results = [];\n\nfor (const item of $input.all()) {\n  const output = item.json.output?.[0]?.content?.[0]?.text || {};\n  results.push({\n    json: {\n      headline: item.json.headline,\n      date: item.json.date,\n      source: item.json.source,\n      region: item.json.region,\n      tone: output.tone || \"unknown\",\n      topics: Array.isArray(output.topics) ? output.topics.join(\", \") : \"\"\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2752,
+        2256
+      ],
+      "id": "97c12e25-6a3a-403a-be6d-ebc15287cbdf",
+      "name": "Extract Tone & Topics"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2960,
+        2032
+      ],
+      "id": "fc31ddff-d0a5-467c-8cdd-07dd816acb58",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "compare": "selectedFields",
+        "fieldsToCompare": "headline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        3168,
+        2032
+      ],
+      "id": "bdbbd58c-2c7b-44f0-b2b6-f803aa074c4b",
+      "name": "Remove Duplicates"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily 9 AM AEST Cron": {
+      "main": [
+        [
+          {
+            "node": "GDELT API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GDELT API Request": {
+      "main": [
+        [
+          {
+            "node": "Extract GDELT Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Google Sheets": {
+      "main": [
+        []
+      ]
+    },
+    "Extract GDELT Fields": {
+      "main": [
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model1": {
+      "main": [
+        [
+          {
+            "node": "Extract Tone & Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Tone & Topics": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a1c72fdd-cf85-4dc9-a7c2-59ecf450ca80",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b68d6c7a10634fa0cd76b4e3b645af0b12acfc43cb7ccbebb3e17b535388fee6"
+  },
+  "id": "lDkD9YnZF4tF5LsH",
+  "tags": []
+}
